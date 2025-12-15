@@ -12,6 +12,8 @@ html,body{
   background:#000;
   font-family:Arial, sans-serif;
 }
+
+/* 提示文字 */
 #hint{
   position:fixed;
   left:50%;
@@ -20,25 +22,51 @@ html,body{
   color:#ccc;
   font-size:14px;
   opacity:0.8;
+  z-index:5;
+}
+
+/* 主页按钮 */
+#homeBtn{
+  position:fixed;
+  top:16px;
+  left:16px;
+  z-index:10;
+  padding:8px 14px;
+  font-size:14px;
+  border-radius:8px;
+  border:none;
+  background:rgba(0,0,0,0.6);
+  color:#fff;
+  cursor:pointer;
+}
+#homeBtn:hover{
+  background:rgba(212,175,55,0.9);
+  color:#000;
 }
 </style>
 </head>
 <body>
 
-<div id="hint">🎄 这是你的英语记忆圣诞树</div>
+<button id="homeBtn">🏠 主页</button>
+<div id="hint">🎄 点击单词可返回复习</div>
 
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
+/* ===============================
+   全局变量
+================================ */
 let scene, camera, renderer;
 let treeGroup = new THREE.Group();
-
-init();
-animate();
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
 
 /* ===============================
    初始化
 ================================ */
+init();
+animate();
+
 function init(){
   scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x000000, 10, 60);
@@ -58,6 +86,7 @@ function init(){
 
   scene.add(new THREE.DirectionalLight(0xffffff,1));
   scene.add(new THREE.AmbientLight(0xffffff,0.4));
+
   scene.add(treeGroup);
 
   createTreeParticles();
@@ -77,7 +106,8 @@ function createTreeParticles(){
     const y = Math.random()*10;
     const r = (10-y)*0.35*Math.random();
     const a = Math.random()*Math.PI*2;
-    pos.push(Math.cos(a)*r,y,Math.sin(a)*r);
+
+    pos.push(Math.cos(a)*r, y, Math.sin(a)*r);
     const c = new THREE.Color().setHSL(0.33,0.8,0.5);
     col.push(c.r,c.g,c.b);
   }
@@ -90,20 +120,21 @@ function createTreeParticles(){
 }
 
 /* ===============================
-   背词系统联动（核心）
+   背词系统联动
 ================================ */
 function loadWordsFromPunch(){
   const index = localStorage.getItem("TREE_RECORD_INDEX");
   const rec = JSON.parse(localStorage.getItem("PUNCH_RECORD") || "[]");
-  if(index===null || !rec[index]) return;
+  if(index === null || !rec[index]) return;
 
   const words = rec[index].words || [];
-  words.forEach((w,i)=>{
-    const tex = createWordTexture(w,i);
-    addWordPlane(tex,i);
+  words.forEach((word,i)=>{
+    const tex = createWordTexture(word,i);
+    addWordPlane(tex, i, word);
   });
 }
 
+/* 单词纹理 */
 function createWordTexture(word,i){
   const c=document.createElement("canvas");
   c.width=512; c.height=256;
@@ -119,7 +150,8 @@ function createWordTexture(word,i){
   ctx.fillStyle="#fff";
   ctx.font="bold 64px serif";
   ctx.textAlign="center";
-  ctx.fillText(word,256,130);
+  ctx.textBaseline="middle";
+  ctx.fillText(word,256,120);
 
   ctx.font="22px serif";
   ctx.fillStyle="#d4af37";
@@ -128,21 +160,43 @@ function createWordTexture(word,i){
   return new THREE.CanvasTexture(c);
 }
 
-function addWordPlane(tex,i){
+/* 把单词挂到树上 + 点击逻辑 */
+function addWordPlane(tex,i,word){
   const mat = new THREE.MeshBasicMaterial({ map:tex, transparent:true });
   const geo = new THREE.PlaneGeometry(3,1.5);
-  const m = new THREE.Mesh(geo,mat);
+  const mesh = new THREE.Mesh(geo,mat);
 
   const y = 1 + i*0.6;
   const a = i*0.9;
-  m.position.set(Math.cos(a)*3,y,Math.sin(a)*3);
-  m.lookAt(0,y,0);
+  mesh.position.set(Math.cos(a)*3, y, Math.sin(a)*3);
+  mesh.lookAt(0,y,0);
 
-  treeGroup.add(m);
+  mesh.userData.word = word;
+  mesh.userData.onClick = () => {
+    localStorage.setItem("REVIEW_WORD", word);
+    window.location.href = "index.html";
+  };
+
+  treeGroup.add(mesh);
 }
 
 /* ===============================
-   动画
+   点击检测
+================================ */
+window.addEventListener("click",(e)=>{
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse,camera);
+  const hits = raycaster.intersectObjects(treeGroup.children);
+
+  if(hits.length && hits[0].object.userData.onClick){
+    hits[0].object.userData.onClick();
+  }
+});
+
+/* ===============================
+   动画 & Resize
 ================================ */
 function animate(){
   requestAnimationFrame(animate);
@@ -155,6 +209,13 @@ function onResize(){
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
 }
+
+/* ===============================
+   主页按钮
+================================ */
+document.getElementById("homeBtn").onclick = ()=>{
+  window.location.href = "index.html";
+};
 </script>
 
 </body>
