@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>英语记忆圣诞树</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+html,body{
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  background:#000;
+  font-family:Arial, sans-serif;
+}
+#hint{
+  position:fixed;
+  left:50%;
+  bottom:20px;
+  transform:translateX(-50%);
+  color:#ccc;
+  font-size:14px;
+  opacity:0.8;
+}
+</style>
+</head>
+<body>
+
+<div id="hint">🎄 这是你的英语记忆圣诞树</div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+let scene, camera, renderer;
+let treeGroup = new THREE.Group();
+
+init();
+animate();
+
+/* ===============================
+   初始化
+================================ */
+function init(){
+  scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x000000, 10, 60);
+
+  camera = new THREE.PerspectiveCamera(
+    60,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    100
+  );
+  camera.position.set(0, 6, 18);
+
+  renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  document.body.appendChild(renderer.domElement);
+
+  scene.add(new THREE.DirectionalLight(0xffffff,1));
+  scene.add(new THREE.AmbientLight(0xffffff,0.4));
+  scene.add(treeGroup);
+
+  createTreeParticles();
+  loadWordsFromPunch();
+
+  window.addEventListener("resize", onResize);
+}
+
+/* ===============================
+   圣诞树粒子
+================================ */
+function createTreeParticles(){
+  const geo = new THREE.BufferGeometry();
+  const pos = [], col = [];
+
+  for(let i=0;i<2000;i++){
+    const y = Math.random()*10;
+    const r = (10-y)*0.35*Math.random();
+    const a = Math.random()*Math.PI*2;
+    pos.push(Math.cos(a)*r,y,Math.sin(a)*r);
+    const c = new THREE.Color().setHSL(0.33,0.8,0.5);
+    col.push(c.r,c.g,c.b);
+  }
+
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos,3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(col,3));
+
+  const mat = new THREE.PointsMaterial({ size:0.15, vertexColors:true });
+  treeGroup.add(new THREE.Points(geo,mat));
+}
+
+/* ===============================
+   背词系统联动（核心）
+================================ */
+function loadWordsFromPunch(){
+  const index = localStorage.getItem("TREE_RECORD_INDEX");
+  const rec = JSON.parse(localStorage.getItem("PUNCH_RECORD") || "[]");
+  if(index===null || !rec[index]) return;
+
+  const words = rec[index].words || [];
+  words.forEach((w,i)=>{
+    const tex = createWordTexture(w,i);
+    addWordPlane(tex,i);
+  });
+}
+
+function createWordTexture(word,i){
+  const c=document.createElement("canvas");
+  c.width=512; c.height=256;
+  const ctx=c.getContext("2d");
+
+  ctx.fillStyle="rgba(10,10,20,0.85)";
+  ctx.fillRect(0,0,512,256);
+
+  ctx.strokeStyle="#d4af37";
+  ctx.lineWidth=6;
+  ctx.strokeRect(12,12,488,232);
+
+  ctx.fillStyle="#fff";
+  ctx.font="bold 64px serif";
+  ctx.textAlign="center";
+  ctx.fillText(word,256,130);
+
+  ctx.font="22px serif";
+  ctx.fillStyle="#d4af37";
+  ctx.fillText(`#${i+1}`,256,190);
+
+  return new THREE.CanvasTexture(c);
+}
+
+function addWordPlane(tex,i){
+  const mat = new THREE.MeshBasicMaterial({ map:tex, transparent:true });
+  const geo = new THREE.PlaneGeometry(3,1.5);
+  const m = new THREE.Mesh(geo,mat);
+
+  const y = 1 + i*0.6;
+  const a = i*0.9;
+  m.position.set(Math.cos(a)*3,y,Math.sin(a)*3);
+  m.lookAt(0,y,0);
+
+  treeGroup.add(m);
+}
+
+/* ===============================
+   动画
+================================ */
+function animate(){
+  requestAnimationFrame(animate);
+  treeGroup.rotation.y += 0.002;
+  renderer.render(scene,camera);
+}
+
+function onResize(){
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+}
+</script>
+
+</body>
+</html>
