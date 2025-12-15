@@ -20,11 +20,6 @@ button,input,select{
   font-size:28px;
   font-weight:bold;
   color:#2c3e50;
-  cursor:pointer;
-}
-.example{
-  color:#555;
-  margin-top:5px;
 }
 .card{
   border:1px solid #ddd;
@@ -44,6 +39,13 @@ button,input,select{
 .record-item:hover{
   text-decoration:underline;
 }
+.reset{
+  margin-top:20px;
+  background:#e74c3c;
+  color:#fff;
+  border:none;
+  border-radius:8px;
+}
 </style>
 </head>
 <body>
@@ -61,6 +63,7 @@ button,input,select{
 
 <br><br>
 <button onclick="start()">开始今日打卡</button>
+<button class="reset" onclick="resetAll()">🗑 重置所有记录</button>
 
 <div id="card" class="card"></div>
 <div id="progress" class="info"></div>
@@ -68,16 +71,28 @@ button,input,select{
 
 <script>
 /* ===============================
-   基础配置
+   常量 & Key
 ================================ */
 const WORD_URL =
   "https://raw.githubusercontent.com/first20hours/google-10000-english/master/google-10000-english-no-swears.txt";
-const CACHE_KEY = "WORD_CACHE_V1";
-const RECORD_KEY = "PUNCH_RECORD";
 
+const CACHE_KEY = "WORD_CACHE_V2";
+const RECORD_KEY = "PUNCH_RECORD";
+const LEARNED_KEY = "LEARNED_WORDS";
+
+/* ===============================
+   全局状态
+================================ */
 let words = [];
 let todayList = [];
 let index = 0;
+
+/* ===============================
+   工具：今天日期
+================================ */
+function todayStr(){
+  return new Date().toLocaleDateString();
+}
 
 /* ===============================
    加载词库
@@ -95,14 +110,26 @@ async function loadWords(){
 loadWords();
 
 /* ===============================
-   开始打卡
+   开始今日打卡（⭐ 去重逻辑）
 ================================ */
 function start(){
   const n = parseInt(dailyCount.value);
-  let pool = [...words];
-  if(orderMode.value==="random") pool.sort(()=>Math.random()-0.5);
+  const order = orderMode.value;
 
-  todayList = pool.slice(0,n);
+  const learned = new Set(
+    JSON.parse(localStorage.getItem(LEARNED_KEY) || "[]")
+  );
+
+  let pool = words.filter(w => !learned.has(w.w));
+
+  if(pool.length === 0){
+    card.innerHTML = "🎉 你已经学完所有单词！";
+    return;
+  }
+
+  if(order === "random") pool.sort(()=>Math.random()-0.5);
+
+  todayList = pool.slice(0, n);
   index = 0;
   showWord();
 }
@@ -129,32 +156,37 @@ function nextWord(){
 }
 
 /* ===============================
-   打卡完成（⭐ 核心联动逻辑）
+   打卡完成（⭐ 记录 + 已学词）
 ================================ */
 function completePunch(){
-  const date = new Date().toLocaleDateString();
   const rec = JSON.parse(localStorage.getItem(RECORD_KEY) || "[]");
+  const learned = new Set(
+    JSON.parse(localStorage.getItem(LEARNED_KEY) || "[]")
+  );
 
   const wordsToday = todayList.map(w=>w.w);
 
+  wordsToday.forEach(w => learned.add(w));
+
   rec.push({
-    date,
+    date: todayStr(),
     count: wordsToday.length,
     words: wordsToday
   });
 
   localStorage.setItem(RECORD_KEY, JSON.stringify(rec));
+  localStorage.setItem(LEARNED_KEY, JSON.stringify([...learned]));
 
-  /* ⭐ 告诉圣诞树：看“最新这一天” */
+  /* ⭐ 圣诞树联动 */
   localStorage.setItem("TREE_RECORD_INDEX", rec.length - 1);
 
   card.innerHTML = "🎉 今日打卡完成！";
-  progress.innerText = `今日学习 ${wordsToday.length} 个单词`;
+  progress.innerText = `今日学习 ${wordsToday.length} 个新单词`;
   showRecord();
 }
 
 /* ===============================
-   显示打卡记录（点击进入圣诞树）
+   打卡记录
 ================================ */
 function showRecord(){
   const rec = JSON.parse(localStorage.getItem(RECORD_KEY) || "[]");
@@ -184,7 +216,24 @@ function openTree(i){
   window.location.href = "tree.html";
 }
 
-/* 初始化记录 */
+/* ===============================
+   重置所有数据
+================================ */
+function resetAll(){
+  if(!confirm("确定要清空所有学习记录吗？")){
+    return;
+  }
+  localStorage.removeItem(RECORD_KEY);
+  localStorage.removeItem(LEARNED_KEY);
+  localStorage.removeItem("TREE_RECORD_INDEX");
+  localStorage.removeItem("REVIEW_WORD");
+
+  card.innerHTML = "🔄 已重置，请重新开始学习";
+  progress.innerText = "";
+  record.innerText = "";
+}
+
+/* 初始化 */
 showRecord();
 </script>
 
