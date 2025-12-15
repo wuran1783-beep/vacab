@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>英语智能背词打卡平台</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body{
+  font-family:Arial, sans-serif;
+  padding:20px;
+  max-width:900px;
+  margin:auto;
+}
+button,input,select{
+  padding:10px;
+  margin:6px;
+  font-size:16px;
+}
+.word{
+  font-size:28px;
+  font-weight:bold;
+  color:#2c3e50;
+  cursor:pointer;
+}
+.example{
+  color:#555;
+  margin-top:5px;
+}
+.card{
+  border:1px solid #ddd;
+  padding:15px;
+  border-radius:10px;
+  margin-top:15px;
+}
+.info{
+  color:#666;
+  margin-top:10px;
+}
+.record-item{
+  cursor:pointer;
+  color:#3498db;
+  margin:6px 0;
+}
+.record-item:hover{
+  text-decoration:underline;
+}
+</style>
+</head>
+<body>
+
+<h1>📖 英语智能背词打卡平台</h1>
+
+<label>每日单词数：</label>
+<input type="number" id="dailyCount" value="10" min="1">
+
+<label>顺序：</label>
+<select id="orderMode">
+  <option value="fixed">固定顺序</option>
+  <option value="random">随机顺序</option>
+</select>
+
+<br><br>
+<button onclick="start()">开始今日打卡</button>
+
+<div id="card" class="card"></div>
+<div id="progress" class="info"></div>
+<div id="record" class="info"></div>
+
+<script>
+/* ===============================
+   基础配置
+================================ */
+const WORD_URL =
+  "https://raw.githubusercontent.com/first20hours/google-10000-english/master/google-10000-english-no-swears.txt";
+const CACHE_KEY = "WORD_CACHE_V1";
+const RECORD_KEY = "PUNCH_RECORD";
+
+let words = [];
+let todayList = [];
+let index = 0;
+
+/* ===============================
+   加载词库
+================================ */
+async function loadWords(){
+  if(localStorage.getItem(CACHE_KEY)){
+    words = JSON.parse(localStorage.getItem(CACHE_KEY));
+    return;
+  }
+  const res = await fetch(WORD_URL);
+  const txt = await res.text();
+  words = txt.split("\n").filter(w=>w.trim()).map(w=>({w}));
+  localStorage.setItem(CACHE_KEY, JSON.stringify(words));
+}
+loadWords();
+
+/* ===============================
+   开始打卡
+================================ */
+function start(){
+  const n = parseInt(dailyCount.value);
+  let pool = [...words];
+  if(orderMode.value==="random") pool.sort(()=>Math.random()-0.5);
+
+  todayList = pool.slice(0,n);
+  index = 0;
+  showWord();
+}
+
+/* ===============================
+   显示单词
+================================ */
+function showWord(){
+  if(index >= todayList.length){
+    completePunch();
+    return;
+  }
+  const w = todayList[index].w;
+  card.innerHTML = `
+    <div class="word">${w}</div>
+    <button onclick="nextWord()">下一个</button>
+  `;
+  progress.innerText = `进度：${index+1} / ${todayList.length}`;
+}
+
+function nextWord(){
+  index++;
+  showWord();
+}
+
+/* ===============================
+   打卡完成（⭐ 核心联动逻辑）
+================================ */
+function completePunch(){
+  const date = new Date().toLocaleDateString();
+  const rec = JSON.parse(localStorage.getItem(RECORD_KEY) || "[]");
+
+  const wordsToday = todayList.map(w=>w.w);
+
+  rec.push({
+    date,
+    count: wordsToday.length,
+    words: wordsToday
+  });
+
+  localStorage.setItem(RECORD_KEY, JSON.stringify(rec));
+
+  /* ⭐ 告诉圣诞树：看“最新这一天” */
+  localStorage.setItem("TREE_RECORD_INDEX", rec.length - 1);
+
+  card.innerHTML = "🎉 今日打卡完成！";
+  progress.innerText = `今日学习 ${wordsToday.length} 个单词`;
+  showRecord();
+}
+
+/* ===============================
+   显示打卡记录（点击进入圣诞树）
+================================ */
+function showRecord(){
+  const rec = JSON.parse(localStorage.getItem(RECORD_KEY) || "[]");
+  if(!rec.length){
+    record.innerHTML = "暂无打卡记录";
+    return;
+  }
+
+  let html = "📝 打卡记录（点击进入圣诞树）：<br>";
+  rec.slice().reverse().forEach((r,i)=>{
+    const realIndex = rec.length - 1 - i;
+    html += `
+      <div class="record-item"
+           onclick="openTree(${realIndex})">
+        🎄 ${r.date}（${r.count} 词）
+      </div>
+    `;
+  });
+  record.innerHTML = html;
+}
+
+/* ===============================
+   跳转圣诞树
+================================ */
+function openTree(i){
+  localStorage.setItem("TREE_RECORD_INDEX", i);
+  window.location.href = "tree.html";
+}
+
+/* 初始化记录 */
+showRecord();
+</script>
+
+</body>
+</html>
